@@ -1,13 +1,13 @@
+import React from 'react';
 import './App.css'
+import LoginPage from './pages/auth/LoginPage';
 
 function App() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold text-blue-600 underline">
-        ¡Hola Mundo!
-      </h1>
-    </div>
-  )
+    // Temporalmente montamos LoginPage directo.
+    // Más adelante aquí irá React Router (ej. <Route path="/login" element={<LoginPage />} />)
+    <LoginPage />
+  );
 }
 
-export default App
+export default App;
