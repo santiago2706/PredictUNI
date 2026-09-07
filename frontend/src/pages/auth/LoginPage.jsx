@@ -3,7 +3,7 @@ import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
 
-const LoginPage = () => {
+const LoginPage = ({ onSwitchView }) => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -55,6 +55,16 @@ const LoginPage = () => {
           Ingresar al Sistema
         </Button>
       </form>
+      <p className="text-center text-sm text-gray-400 mt-4">
+          ¿No tienes cuenta?{' '}
+          <button 
+            type="button" 
+            onClick={onSwitchView}
+            className="text-[#7B3FE4] hover:text-[#9b66f2] font-semibold transition-colors"
+          >
+            Regístrate aquí
+          </button>
+        </p>
     </AuthLayout>
   );
 };

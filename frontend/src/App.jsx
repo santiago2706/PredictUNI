@@ -1,12 +1,23 @@
-import React from 'react';
+import { useState } from 'react';
 import './App.css'
 import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
 
 function App() {
+  const [currentView, setCurrentView] = useState('login');
+
+  const toggleView = () => {
+    setCurrentView(prev => prev === 'login' ? 'register' : 'login');
+  };
+
   return (
-    // Temporalmente montamos LoginPage directo.
-    // Más adelante aquí irá React Router (ej. <Route path="/login" element={<LoginPage />} />)
-    <LoginPage />
+    <>
+      {currentView === 'login' ? (
+        <LoginPage onSwitchView={toggleView} />
+      ) : (
+        <RegisterPage onSwitchView={toggleView} />
+      )}
+    </>
   );
 }
 
