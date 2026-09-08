@@ -7,13 +7,10 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import CursosPage from './pages/dashboard/CursosPage';
 import CalendarioPage from './pages/dashboard/CalendarioPage';
 
-// 1. Creamos el "Guardia" para las rutas privadas
-const ProtectedRoute = () => {
-  // Buscamos el token que guardaremos cuando el login en FastAPI sea exitoso
-  const isAuthenticated = localStorage.getItem('access_token') !== null;
-  
-  // Si está autenticado, renderiza las rutas hijas (<Outlet />). Si no, redirige al login.
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+// Guardián de rutas validando estrictamente 'access_token'
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('access_token');
+  return token ? children : <Navigate to="/login" replace />;
 };
 
 function App() {
