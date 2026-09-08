@@ -1,23 +1,29 @@
-import { useState } from 'react';
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import './App.css';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import DashboardLayout from './layouts/DashboardLayout';
+import DashboardPage from './pages/dashboard/DashboardPage';
+import CursosPage from './pages/dashboard/CursosPage';
+import CalendarioPage from './pages/dashboard/CalendarioPage';
 
 function App() {
-  const [currentView, setCurrentView] = useState('login');
-
-  const toggleView = () => {
-    setCurrentView(prev => prev === 'login' ? 'register' : 'login');
-  };
-
   return (
-    <>
-      {currentView === 'login' ? (
-        <LoginPage onSwitchView={toggleView} />
-      ) : (
-        <RegisterPage onSwitchView={toggleView} />
-      )}
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/cursos" element={<CursosPage />} />
+          <Route path="/calendario" element={<CalendarioPage />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
