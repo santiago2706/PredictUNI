@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from app.api.analysis import router as analysis_router
 
 app = FastAPI(title="PredictUNI Mock Auth API")
 
@@ -65,3 +66,4 @@ def login(user: UserAuth):
         "access_token": fake_token, 
         "token_type": "bearer"
     }
+app.include_router(analysis_router)
