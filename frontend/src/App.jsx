@@ -8,9 +8,9 @@ import CursosPage from './pages/dashboard/CursosPage';
 import CalendarioPage from './pages/dashboard/CalendarioPage';
 
 // Guardián de rutas validando estrictamente 'access_token'
-const ProtectedRoute = () => {
+const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('access_token');
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  return token ? children : <Navigate to="/login" replace />;
 };
 
 function App() {

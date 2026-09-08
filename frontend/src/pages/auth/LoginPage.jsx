@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
@@ -23,7 +24,7 @@ const LoginPage = ({ onSwitchView }) => {
     setServerError('');
     
     try {
-      // 1. Conexión con FastAPI.
+      // 1. Conexión con FastAPI
       const response = await fetch('http://localhost:8000/auth/login', {
         method: 'POST',
         headers: {
