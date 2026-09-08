@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
-import { Link, useNavigate } from 'react-router-dom';
 
-const LoginPage = ({ onSwitchView }) => {
+const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -35,16 +34,13 @@ const LoginPage = ({ onSwitchView }) => {
 
       const data = await response.json();
 
-      // 4. Manejo de Errores (Edge Cases)
       if (!response.ok) {
-        // FastAPI suele devolver el error en la propiedad 'detail'
         throw new Error(data.detail || 'Credenciales inválidas. Inténtalo nuevamente.');
       }
 
-      // 2. Captura y Almacenamiento del JWT
-      // OJO: Asegúrate de que FastAPI devuelve el token en data.access_token o data.token
+      // 2. Captura y Almacenamiento del JWT con clave estandarizada 'access_token'
       const token = data.access_token || data.token; 
-      localStorage.setItem('token', token);
+      localStorage.setItem('access_token', token);
 
       // 3. Redirección Automática al Dashboard
       navigate('/dashboard');
@@ -83,20 +79,26 @@ const LoginPage = ({ onSwitchView }) => {
           onChange={handleChange}
         />
 
+        {serverError && (
+          <p className="text-red-500 text-sm text-center font-medium">
+            {serverError}
+          </p>
+        )}
+
         <Button type="submit" isLoading={isLoading}>
           Ingresar al Sistema
         </Button>
       </form>
+
       <p className="text-center text-sm text-gray-400 mt-4">
-          ¿No tienes cuenta?{' '}
-          <button 
-            type="button" 
-            onClick={onSwitchView}
-            className="text-[#7B3FE4] hover:text-[#9b66f2] font-semibold transition-colors"
-          >
-            Regístrate aquí
-          </button>
-        </p>
+        ¿No tienes cuenta?{' '}
+        <Link 
+          to="/register"
+          className="text-[#7B3FE4] hover:text-[#9b66f2] font-semibold transition-colors"
+        >
+          Regístrate aquí
+        </Link>
+      </p>
     </AuthLayout>
   );
 };

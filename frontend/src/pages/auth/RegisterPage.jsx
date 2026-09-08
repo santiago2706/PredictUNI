@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
 
-const RegisterPage = ({ onSwitchView }) => {
+const RegisterPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -11,7 +12,9 @@ const RegisterPage = ({ onSwitchView }) => {
     confirmPassword: ''
   });
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -19,7 +22,7 @@ const RegisterPage = ({ onSwitchView }) => {
     setError(''); // Limpiamos el error al escribir
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validación de negocio en el frontend
@@ -29,18 +32,38 @@ const RegisterPage = ({ onSwitchView }) => {
     }
 
     setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
     
-    // Simulación del payload para S1-08 (POST /auth/register)
-    const payload = {
-      name: formData.name,
-      email: formData.email,
-      password: formData.password
-    };
-    console.log("Payload de Registro listo:", payload);
-    
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://localhost:8000/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Error al registrar el usuario');
+      }
+
+      setSuccessMessage('¡Cuenta creada exitosamente! Redirigiendo al login...');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1500);
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -89,8 +112,14 @@ const RegisterPage = ({ onSwitchView }) => {
           minLength={8}
           value={formData.confirmPassword}
           onChange={handleChange}
-          error={error} // Aquí inyectamos el error visual si no coinciden
+          error={error}
         />
+
+        {successMessage && (
+          <p className="text-green-400 text-sm text-center font-medium">
+            {successMessage}
+          </p>
+        )}
 
         <Button type="submit" isLoading={isLoading}>
           Crear Cuenta
@@ -98,13 +127,12 @@ const RegisterPage = ({ onSwitchView }) => {
 
         <p className="text-center text-sm text-gray-400 mt-4">
           ¿Ya tienes cuenta?{' '}
-          <button 
-            type="button" 
-            onClick={onSwitchView}
+          <Link 
+            to="/login"
             className="text-[#7B3FE4] hover:text-[#9b66f2] font-semibold transition-colors"
           >
             Inicia sesión
-          </button>
+          </Link>
         </p>
       </form>
     </AuthLayout>

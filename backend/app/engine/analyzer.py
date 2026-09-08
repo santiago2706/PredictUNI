@@ -7,8 +7,11 @@ def analizar_carga(actividades, disponibilidad):
     deficit_total = 0
     hoy = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    for dia, horas in disponibilidad.items():
-        distribucion[dia] = {"horas_disponibles": horas, "horas_asignadas": 0}
+    for dia in range(7):
+        distribucion[dia] = {
+            "horas_disponibles": disponibilidad.get(dia, 0),
+            "horas_asignadas": 0
+        }
 
     horas_totales_requeridas = 0
 

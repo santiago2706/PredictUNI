@@ -1,6 +1,8 @@
+from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from app.api.analysis import router as analysis_router
 
 app = FastAPI(title="PredictUNI Mock Auth API")
 
@@ -13,6 +15,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Incluimos los routers de la aplicación
+app.include_router(analysis_router)
+
 # 2. Base de datos simulada (En memoria)
 fake_users_db = {}
 
@@ -21,9 +26,14 @@ class UserAuth(BaseModel):
     email: str # En el futuro, usa EmailStr de pydantic para validar el formato
     password: str
 
+class UserRegister(BaseModel):
+    name: Optional[str] = None
+    email: str
+    password: str
+
 # 4. Endpoints
 @app.post("/auth/register")
-def register(user: UserAuth):
+def register(user: UserRegister):
     # Verificamos si el usuario ya existe
     if user.email in fake_users_db:
         raise HTTPException(
@@ -33,6 +43,7 @@ def register(user: UserAuth):
     
     # Guardamos en nuestra DB simulada (¡Sin hashear por ahora para pruebas rápidas!)
     fake_users_db[user.email] = {
+        "name": user.name,
         "email": user.email,
         "password": user.password
     }
