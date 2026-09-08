@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
@@ -6,22 +7,52 @@ import Button from '../../components/ui/Button';
 const LoginPage = ({ onSwitchView }) => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
+
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { id, value } = e.target;
     setFormData(prev => ({ ...prev, [id]: value }));
+    setServerError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setServerError('');
     
-    // Simulación de petición al backend de FastAPI
-    console.log("Payload listo para S1-08:", formData);
-    
-    setTimeout(() => {
+    try {
+      // 1. Conexión con FastAPI
+      const response = await fetch('http://localhost:8000/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      // 4. Manejo de Errores (Edge Cases)
+      if (!response.ok) {
+        // FastAPI suele devolver el error en la propiedad 'detail'
+        throw new Error(data.detail || 'Credenciales inválidas. Inténtalo nuevamente.');
+      }
+
+      // 2. Captura y Almacenamiento del JWT
+      // OJO: Asegúrate de que FastAPI devuelve el token en data.access_token o data.token
+      const token = data.access_token || data.token; 
+      localStorage.setItem('token', token);
+
+      // 3. Redirección Automática al Dashboard
+      navigate('/dashboard');
+
+    } catch (error) {
+      setServerError(error.message);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
