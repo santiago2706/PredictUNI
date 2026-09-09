@@ -69,3 +69,4 @@ def login(user: UserAuth):
         "access_token": fake_token, 
         "token_type": "bearer"
     }
+app.include_router(analysis_router)
