@@ -5,6 +5,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import DashboardLayout from './layouts/DashboardLayout';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import CursosPage from './pages/dashboard/CursosPage';
+import ActividadesPage from './pages/dashboard/ActividadesPage';
 import CalendarioPage from './pages/dashboard/CalendarioPage';
 
 // Guardián de rutas validando estrictamente 'access_token'
@@ -27,6 +28,7 @@ function App() {
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/cursos" element={<CursosPage />} />
+            <Route path="/actividades" element={<ActividadesPage />} />
             <Route path="/calendario" element={<CalendarioPage />} />
           </Route>
         </Route>
