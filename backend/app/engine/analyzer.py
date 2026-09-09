@@ -7,34 +7,36 @@ def analizar_carga(actividades, disponibilidad):
     deficit_total = 0
     hoy = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # FIX 4: Mapear la distribución usando los nombres de los días como llaves
     for dia_idx, horas in disponibilidad.items():
         nombre_dia = dias_semana[int(dia_idx)]
         distribucion[nombre_dia] = {"horas_disponibles": horas, "horas_asignadas": 0}
 
     horas_totales_requeridas = 0
 
+    # SOLUCIÓN 1: Filtrar fechas inválidas y ordenar actividades de la más urgente a la más lejana
+    actividades_validas = []
     for act in actividades:
+        try:
+            act["fecha_obj"] = datetime.strptime(act["fecha_entrega"], "%Y-%m-%d")
+            actividades_validas.append(act)
+        except ValueError:
+            raise ValueError(f"Formato de fecha inválido en '{act.get('nombre', 'Desconocida')}'. Se requiere YYYY-MM-DD.")
+            
+    actividades_ordenadas = sorted(actividades_validas, key=lambda x: x["fecha_obj"])
+
+    for act in actividades_ordenadas:
         horas_necesarias = act["horas_estimadas"] * act["peso_dificultad"]
         horas_totales_requeridas += horas_necesarias
-        
-        # FIX 3: Captura de excepciones para evitar Crash/Error 500
-        try:
-            # FIX 1: Iniciamos la iteración el mismo día de la entrega
-            fecha_actual = datetime.strptime(act["fecha_entrega"], "%Y-%m-%d")
-        except ValueError:
-            raise ValueError(f"Formato de fecha inválido en la actividad '{act.get('nombre', 'Desconocida')}'. Se requiere YYYY-MM-DD.")
+        fecha_actual = act["fecha_obj"]
         
         while horas_necesarias > 0:
             if fecha_actual < hoy:
-                # Si llegamos al pasado y faltan horas, se va a déficit
                 deficit_total += horas_necesarias
                 break
                 
             dia_idx = fecha_actual.weekday()
             nombre_dia = dias_semana[dia_idx]
             
-            # Verificamos si el día existe en la disponibilidad del usuario
             if nombre_dia in distribucion:
                 disp_hoy = distribucion[nombre_dia]["horas_disponibles"]
                 asignadas_hoy = distribucion[nombre_dia]["horas_asignadas"]
@@ -50,10 +52,12 @@ def analizar_carga(actividades, disponibilidad):
     alertas = []
     horas_totales_disp = sum(d["horas_disponibles"] for d in distribucion.values())
     
-    # Cálculo crudo para determinar el riesgo interno (puede superar 100)
-    porcentaje_crudo = (horas_totales_requeridas / horas_totales_disp) * 100 if horas_totales_disp > 0 else 100
+    # SOLUCIÓN 2: Manejo correcto del límite inferior para evitar división por cero
+    if horas_totales_disp > 0:
+        porcentaje_crudo = (horas_totales_requeridas / horas_totales_disp) * 100
+    else:
+        porcentaje_crudo = 100.0 if horas_totales_requeridas > 0 else 0.0
     
-    # FIX 2: Limitamos la salida visual máxima al 100% para el frontend
     porcentaje_global_visual = min(porcentaje_crudo, 100.0)
     
     if porcentaje_crudo <= 60:
