@@ -24,10 +24,16 @@ const PRIORIDAD_OPTIONS = [
 ];
 
 const todayISO = () => new Date().toISOString().split('T')[0];
+const maxDateISO = () => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().split('T')[0];
+};
 
 const INITIAL_STATE = {
   nombre: '',
   tipo: '',
+  tipo_otro: '',
   fecha_entrega: '',
   horas_estimadas: '',
   peso_dificultad: '',
@@ -39,21 +45,41 @@ const ActivityForm = ({ onActivityCreated }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = (e) => {
+const MAX_HORAS = 100;
+
+const handleChange = (e) => {
     const { id, value } = e.target;
 
-    if (id === 'horas_estimadas' && value !== '' && !/^\d*\.?\d*$/.test(value)) return;
+    if (id === 'horas_estimadas') {
+      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
+      if (value !== '' && Number(value) > MAX_HORAS) return;
+    }
 
     setFormData((prev) => ({ ...prev, [id]: value }));
     setErrors((prev) => ({ ...prev, [id]: undefined }));
+  };
+
+  const handleDateBlur = () => {
+    if (!formData.fecha_entrega) return;
+    if (formData.fecha_entrega < todayISO()) {
+      setFormData((prev) => ({ ...prev, fecha_entrega: todayISO() }));
+    } else if (formData.fecha_entrega > maxDateISO()) {
+      setFormData((prev) => ({ ...prev, fecha_entrega: maxDateISO() }));
+    }
   };
 
   const validate = () => {
     const next = {};
     if (!formData.nombre.trim()) next.nombre = 'Ingresa el nombre de la actividad';
     if (!formData.tipo) next.tipo = 'Selecciona el tipo';
+    if (formData.tipo === 'Otro' && !formData.tipo_otro.trim()) {
+      next.tipo_otro = 'Especifica el tipo de actividad';
+    } 
     if (!formData.fecha_entrega) {
       next.fecha_entrega = 'Selecciona la fecha de entrega';
+      next.fecha_entrega = 'La fecha debe ser hoy o futura';
+    } else if (formData.fecha_entrega > maxDateISO()) {
+      next.fecha_entrega = 'La fecha es demasiado lejana';
     } else if (formData.fecha_entrega < todayISO()) {
       next.fecha_entrega = 'La fecha debe ser hoy o futura';
     }
@@ -76,7 +102,7 @@ const ActivityForm = ({ onActivityCreated }) => {
     // hasta que el endpoint real esté disponible.
     const payload = {
       nombre: formData.nombre.trim(),
-      tipo: formData.tipo,
+      tipo: formData.tipo === 'Otro' ? formData.tipo_otro.trim() : formData.tipo,
       fecha_entrega: formData.fecha_entrega,
       horas_estimadas: Number(formData.horas_estimadas),
       peso_dificultad: Number(formData.peso_dificultad),
@@ -112,14 +138,26 @@ const ActivityForm = ({ onActivityCreated }) => {
         onChange={handleChange}
         error={errors.tipo}
       />
-
+      {formData.tipo === 'Otro' && (
+        <InputField
+          label="Especifica el tipo"
+          id="tipo_otro"
+          type="text"
+          placeholder="Ej. Laboratorio, Reunion, etc."
+          value={formData.tipo_otro}
+          onChange={handleChange}
+          error={errors.tipo_otro}
+        />
+      )}      
       <InputField
         label="Fecha de entrega"
         id="fecha_entrega"
         type="date"
         min={todayISO()}
+        max={maxDateISO()}
         value={formData.fecha_entrega}
         onChange={handleChange}
+        onBlur={handleDateBlur}
         error={errors.fecha_entrega}
       />
 
