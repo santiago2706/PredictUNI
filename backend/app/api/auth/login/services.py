@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from app.api.auth.login.schemas import UserLogin
-from app.api.auth.services import fake_users_db
+
 from app.db.connection import supabase
 
 def login_user(user: UserLogin):

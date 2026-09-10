@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from app.api.auth.register.schemas import UserRegister
-from app.api.auth.services import fake_users_db
+
 from app.db.connection import supabase
 
 def register_user(user: UserRegister):
@@ -33,7 +33,8 @@ def register_user(user: UserRegister):
         return {
             "status": "success",
             "message": "Usuario registrado correctamente",
-            "access_token": auth_response.session.access_token
+            "access_token": auth_response.session.access_token,
+            "token_type": "bearer"
         }
 
     except Exception as e:
