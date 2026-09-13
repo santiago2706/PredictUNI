@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import RiskCard from '../../components/dashboard/RiskCard';
+import WeeklyLoadChart from '../../components/dashboard/WeeklyLoadChart';
 
 // URL del backend — cuando se despliegue en Render, cambia esto por la URL real
 const API_BASE = 'http://localhost:8000';
@@ -89,12 +90,15 @@ const DashboardPage = () => {
       )}
 
       {analysis && !loading && (
-        <RiskCard
-          porcentaje={analysis.porcentaje_global}
-          riesgo={analysis.riesgo_semanal}
-          recomendaciones={analysis.recomendaciones}
-          mapa_diario={analysis.mapa_diario}
-        />
+        <>
+          <RiskCard
+            porcentaje={analysis.porcentaje_global}
+            riesgo={analysis.riesgo_semanal}
+            recomendaciones={analysis.recomendaciones}
+            mapa_diario={analysis.mapa_diario}
+          />
+          <WeeklyLoadChart mapa_diario={analysis.mapa_diario} />
+        </>
       )}
     </div>
   );
