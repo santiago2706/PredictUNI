@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from app.api.analysis import router as analysis_router
 from app.api.auth.routes import router as auth_router
-
+from app.api.courses.routes import router as courses_router
+from app.api.availability.routes import router as availability_router
 from app.db.connection import supabase
 from datetime import date
 import json
@@ -23,6 +24,8 @@ app.add_middleware(
 # Incluimos los routers de la aplicación
 app.include_router(analysis_router)
 app.include_router(auth_router)
+app.include_router(courses_router)
+app.include_router(availability_router)
 
 
 

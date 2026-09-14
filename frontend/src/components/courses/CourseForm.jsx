@@ -19,13 +19,21 @@ const CourseForm = ({ onCourseCreated }) => {
   const handleChange = (e) => {
     const { id, value } = e.target;
 
-    // Créditos: solo dígitos
-    if (id === 'credits' && value !== '' && !/^\d+$/.test(value)) return;
+  // Créditos: 1 dígito del 1 al 9, con hasta 1 decimal opcional (ej. 4, 4.5)
+    if (id === 'credits' && value !== '' && !/^[1-9]?(\.\d?)?$/.test(value)) return;
 
     setFormData((prev) => ({ ...prev, [id]: value }));
     setErrors((prev) => ({ ...prev, [id]: undefined }));
   };
-
+  const handleCreditsBlur = () => {
+    const val = formData.credits;
+    if (!val) return;
+    if (!val.includes('.')) {
+      setFormData((prev) => ({ ...prev, credits: `${val}.0` }));
+    } else if (val.endsWith('.')) {
+      setFormData((prev) => ({ ...prev, credits: `${val}0` }));
+    }
+  };
   const validate = () => {
     const next = {};
     if (!formData.name.trim()) next.name = 'Ingresa el nombre del curso';
@@ -79,6 +87,7 @@ const CourseForm = ({ onCourseCreated }) => {
           placeholder="MA-101"
           value={formData.code}
           onChange={handleChange}
+          onBlur={handleCreditsBlur}
           error={errors.code}
         />
 
