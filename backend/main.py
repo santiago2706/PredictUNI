@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from app.api.analysis import router as analysis_router
+from app.api.analysis.routes import router as analysis_router
 from app.api.auth.routes import router as auth_router
 from app.api.courses.routes import router as courses_router
 from app.api.availability.routes import router as availability_router
