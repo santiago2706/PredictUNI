@@ -3,6 +3,8 @@ import InputField from '../ui/InputField';
 import Select from '../ui/Select';
 import Button from '../ui/Button';
 
+const API_BASE = 'http://localhost:8000';
+
 const DIFFICULTY_OPTIONS = [
   { value: '1', label: 'Baja' },
   { value: '2', label: 'Media' },
@@ -15,6 +17,7 @@ const CourseForm = ({ onCourseCreated }) => {
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -44,27 +47,44 @@ const CourseForm = ({ onCourseCreated }) => {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate() || isLoading) return;
 
     setIsLoading(true);
+    setServerError('');
 
-    // Payload listo para S1-07 (POST /courses); por ahora se simula la petición
-    // hasta que la integración real (S1-09) esté disponible.
     const payload = {
       name: formData.name.trim(),
       code: formData.code.trim(),
       credits: Number(formData.credits),
       difficulty_weight: Number(formData.difficulty),
     };
-    console.log('Payload de Curso listo:', payload);
 
-    setTimeout(() => {
-      onCourseCreated?.(payload);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/courses/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'No se pudo registrar el curso. Inténtalo nuevamente.');
+      }
+
+      onCourseCreated?.(data);
       setFormData(INITIAL_STATE);
+    } catch (error) {
+      setServerError(error.message);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -112,6 +132,10 @@ const CourseForm = ({ onCourseCreated }) => {
         onChange={handleChange}
         error={errors.difficulty}
       />
+
+      {serverError && (
+        <p className="text-red-400 text-sm text-center font-medium">{serverError}</p>
+      )}
 
       <Button type="submit" isLoading={isLoading}>
         Agregar curso
