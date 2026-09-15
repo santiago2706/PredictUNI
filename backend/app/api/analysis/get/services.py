@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.db.connection import supabase
 from app.api.analysis.schemas import AnalysisResponse, DailyAnalysis
 
-def get_analysis_data(user_id: str) -> AnalysisResponse:
+def get_analysis_data(user_id: str, extra_hours_by_day: Optional[Dict[int, int]] = None) -> AnalysisResponse:
     # 1. Data Fetching
     availability_res = supabase.table("availability").select("*").eq("user_id", user_id).execute()
     availability_data = availability_res.data
@@ -26,7 +26,12 @@ def get_analysis_data(user_id: str) -> AnalysisResponse:
     # 2. Mapeos Rápidos
     course_map = {course["id"]: course.get("difficulty_weight", 1.0) for course in courses_data}
     user_availability = {item["day_of_week"]: item["available_hours"] for item in availability_data}
-    
+
+    # Modo Simulación: aplica horas extra (positivas o negativas) sobre la disponibilidad real, sin persistirla
+    if extra_hours_by_day:
+        for day, extra_hours in extra_hours_by_day.items():
+            user_availability[day] = max(0, user_availability.get(day, 0) + extra_hours)
+
     # 3. Filtrar y procesar actividades
     valid_activities = []
     now = datetime.now()
