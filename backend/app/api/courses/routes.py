@@ -2,7 +2,9 @@ from fastapi import APIRouter, status, Depends
 from typing import List
 
 from app.api.auth.dependencies import get_current_user_id
-from app.api.courses.schemas import CourseCreate, CourseUpdate, CourseResponse
+from app.api.courses.create.schemas import CourseCreate
+from app.api.courses.update.schemas import CourseUpdate
+from app.api.courses.schemas import CourseResponse
 
 from app.api.courses.create.services import create_course
 from app.api.courses.get.services import get_courses
