@@ -11,7 +11,7 @@ def get_analysis_data(user_id: str, extra_hours_by_day: Optional[Dict[int, int]]
     courses_res = supabase.table("courses").select("*").eq("user_id", user_id).execute()
     courses_data = courses_res.data
     
-    activities_res = supabase.table("activities").select("*").eq("user_id", user_id).eq("status", "pending").execute()
+    activities_res = supabase.table("activities").select("*").eq("user_id", user_id).eq("status", "Pendiente").execute()
     activities_data = activities_res.data
 
     # Prevención de Error: Usuario sin disponibilidad

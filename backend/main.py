@@ -6,6 +6,7 @@ from app.api.analysis.routes import router as analysis_router
 from app.api.auth.routes import router as auth_router
 from app.api.courses.routes import router as courses_router
 from app.api.availability.routes import router as availability_router
+from app.api.activities.routes import router as activities_router
 from app.db.connection import supabase
 from datetime import date
 import json
@@ -26,6 +27,7 @@ app.include_router(analysis_router)
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(availability_router)
+app.include_router(activities_router)
 
 
 
