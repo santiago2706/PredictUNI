@@ -1,28 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BookOpen, RefreshCw, Clock } from 'lucide-react';
 import CourseForm from '../../components/courses/CourseForm';
-
-const API_BASE = 'http://localhost:8000';
+import { formatSessionSummary } from '../../utils/schedule';
+import { authFetch, clearSession, SESSION_EXPIRED_MESSAGE } from '../../utils/api';
 
 const DIFFICULTY_LABELS = { 1: 'Baja', 2: 'Media', 3: 'Alta' };
 
 const CursosPage = () => {
+  const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
+  }, [navigate]);
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE}/courses/`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
+      const response = await authFetch('/courses/');
 
+      if (response.status === 401) return handleSessionExpired();
       if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
 
       const data = await response.json();
@@ -33,7 +35,7 @@ const CursosPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleSessionExpired]);
 
   useEffect(() => {
     fetchCourses();
@@ -92,17 +94,43 @@ const CursosPage = () => {
             {courses.map((course, i) => (
               <li
                 key={course.id ?? `${course.code}-${i}`}
-                className="flex items-center justify-between rounded-lg border border-gray-800 bg-[#1A1025] px-4 py-3"
+                className="rounded-lg border border-gray-800 bg-[#1A1025] px-4 py-3"
               >
-                <div>
-                  <p className="text-white text-sm font-medium">{course.name}</p>
-                  <p className="text-gray-500 text-xs">
-                    {course.code} · {course.credits} créditos
-                  </p>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-white text-sm font-medium">{course.name}</p>
+                    <p className="text-gray-500 text-xs">
+                      {course.code} · {course.credits} créditos
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-[#9b66f2] bg-[#7B3FE4]/15 px-2 py-1 rounded-md shrink-0">
+                    {DIFFICULTY_LABELS[course.difficulty_weight] ?? '—'}
+                  </span>
                 </div>
-                <span className="text-xs font-medium text-[#9b66f2] bg-[#7B3FE4]/15 px-2 py-1 rounded-md">
-                  {DIFFICULTY_LABELS[course.difficulty_weight] ?? '—'}
-                </span>
+
+                {course.schedule && (
+                  <div className="mt-2.5 pt-2.5 border-t border-gray-800/80 flex items-start gap-2">
+                    <Clock size={13} className="text-gray-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      {course.schedule.sessions?.length > 0 ? (
+                        <p className="text-xs text-gray-400">
+                          {course.schedule.sessions.map((s, idx) => (
+                            <span key={idx}>
+                              {formatSessionSummary(s)}
+                              {s.type ? ` (${s.type})` : ''}
+                              {idx < course.schedule.sessions.length - 1 ? ' · ' : ''}
+                            </span>
+                          ))}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500">Sin sesiones semanales definidas</p>
+                      )}
+                      <p className="text-[11px] text-gray-600 mt-0.5">
+                        Ciclo: {course.schedule.term_start} — {course.schedule.term_end}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
