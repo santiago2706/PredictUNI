@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut } from 'lucide-react';
+import { clearSession } from '../../utils/api';
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
@@ -26,7 +27,7 @@ const Navbar = ({ onMenuClick, pathname }) => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
+    clearSession();
     navigate('/login');
   };
 

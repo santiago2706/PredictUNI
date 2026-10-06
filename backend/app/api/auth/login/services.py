@@ -22,6 +22,7 @@ def login_user(user: UserLogin):
         return {
             "message": "Inicio de sesion exitoso",
             "access_token": login_response.session.access_token,
+            "refresh_token": login_response.session.refresh_token,
             "token_type": "bearer"
         }
 

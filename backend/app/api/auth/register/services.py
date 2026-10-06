@@ -34,6 +34,7 @@ def register_user(user: UserRegister):
             "status": "success",
             "message": "Usuario registrado correctamente",
             "access_token": auth_response.session.access_token,
+            "refresh_token": auth_response.session.refresh_token,
             "token_type": "bearer"
         }
 

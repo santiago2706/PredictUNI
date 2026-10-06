@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
+import { API_BASE, saveSession } from '../../utils/api';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
-  const [serverError, setServerError] = useState('');
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const [serverError, setServerError] = useState(location.state?.message || '');
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -24,7 +26,7 @@ const LoginPage = () => {
     
     try {
       // 1. Conexión con FastAPI
-      const response = await fetch('http://localhost:8000/auth/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,9 +40,8 @@ const LoginPage = () => {
         throw new Error(data.detail || 'Credenciales inválidas. Inténtalo nuevamente.');
       }
 
-      // 2. Captura y Almacenamiento del JWT con clave estandarizada 'access_token'
-      const token = data.access_token || data.token; 
-      localStorage.setItem('access_token', token);
+      // 2. Captura y almacenamiento del access_token + refresh_token
+      saveSession(data);
 
       // 3. Redirección Automática al Dashboard
       navigate('/dashboard');
