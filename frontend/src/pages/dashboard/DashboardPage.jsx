@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, FlaskConical } from 'lucide-react';
+import { RefreshCw, FlaskConical, CalendarClock, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import RiskCard from '../../components/dashboard/RiskCard';
 import WeeklyLoadChart from '../../components/dashboard/WeeklyLoadChart';
 import Button from '../../components/ui/Button';
-import { adaptAnalysisResponse, DIAS_ORDEN } from '../../utils/analysis';
-
-// URL del backend — cuando se despliegue en Render, cambia esto por la URL real
-const API_BASE = 'http://localhost:8000';
-const SESSION_EXPIRED_MESSAGE = 'Tu sesión expiró. Inicia sesión nuevamente.';
+import { adaptAnalysisResponse, summarizeMapaDiario, DIAS_ORDEN } from '../../utils/analysis';
+import { authFetch, clearSession, SESSION_EXPIRED_MESSAGE } from '../../utils/api';
 
 const Skeleton = ({ className = '' }) => (
   <div className={`animate-pulse bg-gray-700/50 rounded-lg ${className}`} />
@@ -41,7 +38,7 @@ const DashboardPage = () => {
   const [simulatedAnalysis, setSimulatedAnalysis] = useState(null);
 
   const handleSessionExpired = useCallback(() => {
-    localStorage.removeItem('access_token');
+    clearSession();
     navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
   }, [navigate]);
 
@@ -49,13 +46,7 @@ const DashboardPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`${API_BASE}/analysis`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
+      const res = await authFetch('/analysis/');
 
       if (res.status === 401) return handleSessionExpired();
       if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
@@ -83,13 +74,8 @@ const DashboardPage = () => {
     setSimLoading(true);
     setSimError('');
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`${API_BASE}/analysis/simulate`, {
+      const res = await authFetch('/analysis/simulate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
         body: JSON.stringify({ dia_modificar: simDay, horas_extra: horas }),
       });
 
@@ -118,8 +104,11 @@ const DashboardPage = () => {
     }
   };
 
-  const displayAnalysis = simEnabled && simulatedAnalysis ? simulatedAnalysis : analysis;
-  const adapted = adaptAnalysisResponse(displayAnalysis);
+  const realAdapted = adaptAnalysisResponse(analysis);
+  const simAdapted = adaptAnalysisResponse(simulatedAnalysis);
+  const adapted = simEnabled && simAdapted ? simAdapted : realAdapted;
+  const sinDatos = adapted && Object.keys(adapted.mapa_diario).length === 0;
+  const resumenSemana = adapted && !sinDatos ? summarizeMapaDiario(adapted.mapa_diario) : null;
 
   return (
     <div className="space-y-6">
@@ -141,17 +130,38 @@ const DashboardPage = () => {
       </div>
 
       {simEnabled && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
-          <div className="flex items-center gap-2 text-yellow-300 text-sm font-semibold">
-            <FlaskConical size={16} className="shrink-0" />
-            Modo Simulación activo — estos datos son ficticios, no reflejan tu carga real
+        <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-yellow-300 text-sm font-semibold">
+              <FlaskConical size={16} className="shrink-0" />
+              Modo Simulación activo — estos datos son ficticios, no reflejan tu carga real
+            </div>
+            <button
+              onClick={() => handleToggleSim(false)}
+              className="text-xs font-medium text-yellow-200 hover:text-white underline shrink-0"
+            >
+              Salir
+            </button>
           </div>
-          <button
-            onClick={() => handleToggleSim(false)}
-            className="text-xs font-medium text-yellow-200 hover:text-white underline shrink-0"
-          >
-            Salir
-          </button>
+
+          {realAdapted && simAdapted && (() => {
+            const antes = realAdapted.porcentaje_global;
+            const despues = simAdapted.porcentaje_global;
+            const delta = despues - antes;
+            const DeltaIcon = delta > 0.5 ? TrendingUp : delta < -0.5 ? TrendingDown : Minus;
+            const deltaColor = delta > 0.5 ? 'text-red-400' : delta < -0.5 ? 'text-green-400' : 'text-gray-400';
+            return (
+              <div className="flex items-center gap-2 text-xs text-yellow-100/80 bg-black/20 rounded-lg px-3 py-2 w-fit">
+                <span>Carga real: <span className="font-semibold text-white">{antes}%</span></span>
+                <ArrowRight size={12} className="text-yellow-100/50" />
+                <span>Simulada: <span className="font-semibold text-white">{despues}%</span></span>
+                <span className={`flex items-center gap-0.5 font-semibold ${deltaColor}`}>
+                  <DeltaIcon size={13} />
+                  {delta > 0 ? '+' : ''}{Math.round(delta * 10) / 10}%
+                </span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -236,7 +246,23 @@ const DashboardPage = () => {
         </div>
       )}
 
-      {adapted && !loading && (
+      {adapted && !loading && sinDatos && (
+        <div className="rounded-xl border border-dashed border-gray-800 p-8 text-center">
+          <CalendarClock size={28} className="mx-auto mb-3 text-gray-600" />
+          <p className="text-white font-medium text-sm mb-1">Aún no hay datos para analizar tu carga</p>
+          <p className="text-gray-500 text-xs mb-4 max-w-sm mx-auto">
+            Configura tu disponibilidad semanal en Actividades para que PredictUNI pueda calcular tu riesgo de sobrecarga.
+          </p>
+          <button
+            onClick={() => navigate('/actividades')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#7B3FE4] hover:bg-[#6A32C9] px-4 py-2 rounded-lg transition-colors"
+          >
+            Configurar disponibilidad <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {adapted && !loading && !sinDatos && (
         <>
           <RiskCard
             porcentaje={adapted.porcentaje_global}
@@ -244,6 +270,24 @@ const DashboardPage = () => {
             recomendaciones={adapted.recomendaciones}
             mapa_diario={adapted.mapa_diario}
           />
+
+          {resumenSemana && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-gray-800 bg-[#150A21] p-4 text-center">
+                <p className="text-green-400 text-2xl font-bold">{resumenSemana.counts.bajo}</p>
+                <p className="text-[11px] text-gray-500 mt-1">días carga baja</p>
+              </div>
+              <div className="rounded-xl border border-gray-800 bg-[#150A21] p-4 text-center">
+                <p className="text-yellow-400 text-2xl font-bold">{resumenSemana.counts.medio}</p>
+                <p className="text-[11px] text-gray-500 mt-1">días carga media</p>
+              </div>
+              <div className="rounded-xl border border-gray-800 bg-[#150A21] p-4 text-center">
+                <p className="text-red-400 text-2xl font-bold">{resumenSemana.counts.alto}</p>
+                <p className="text-[11px] text-gray-500 mt-1">en sobrecarga</p>
+              </div>
+            </div>
+          )}
+
           <WeeklyLoadChart mapa_diario={adapted.mapa_diario} />
         </>
       )}

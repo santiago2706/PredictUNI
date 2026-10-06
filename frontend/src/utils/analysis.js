@@ -22,3 +22,20 @@ export function adaptAnalysisResponse(analysis) {
     mapa_diario,
   };
 }
+
+// Mismos umbrales que usa el backend (60% / 85%) para clasificar riesgo por día.
+export const nivelRiesgo = (pct) => (pct > 85 ? 'alto' : pct > 60 ? 'medio' : 'bajo');
+
+// Resume un mapa_diario (día -> {horas_disponibles, horas_asignadas}) en conteos por nivel
+// de riesgo y el/los día(s) con mayor carga. Usado para las tarjetas de resumen semanal.
+export function summarizeMapaDiario(mapa_diario = {}) {
+  const dias = Object.entries(mapa_diario).map(([nombre, d]) => {
+    const pct = d.horas_disponibles > 0 ? (d.horas_asignadas / d.horas_disponibles) * 100 : 0;
+    return { nombre, pct, nivel: nivelRiesgo(pct), ...d };
+  });
+  const counts = { bajo: 0, medio: 0, alto: 0 };
+  dias.forEach((d) => counts[d.nivel]++);
+  const maxPct = dias.length > 0 ? Math.max(...dias.map((d) => d.pct)) : 0;
+  const diasMasCargados = maxPct > 0 ? dias.filter((d) => d.pct === maxPct) : [];
+  return { dias, counts, diasMasCargados, maxPct };
+}

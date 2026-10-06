@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CalendarDays, TrendingUp, ArrowRight } from 'lucide-react';
-
-const API_BASE = 'http://localhost:8000';
+import { adaptAnalysisResponse } from '../../utils/analysis';
+import { authFetch, clearSession, SESSION_EXPIRED_MESSAGE } from '../../utils/api';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -21,35 +21,76 @@ const nivelRiesgo = (pct) => (pct > 85 ? 'alto' : pct > 60 ? 'medio' : 'bajo');
 const nombreDia = (date) => DIAS_NOMBRE[(date.getDay() + 6) % 7];
 const isSameDay = (a, b) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+// Evita usar toISOString() para comparar fechas: convierte a UTC y puede desplazar el día según el huso horario local.
+const toLocalISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const CalendarioPage = () => {
   const navigate = useNavigate();
   const [analysis, setAnalysis] = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
+  }, [navigate]);
+
   useEffect(() => {
-    const fetchAnalysis = async () => {
+    const fetchAll = async () => {
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem('access_token');
-        const res = await fetch(`${API_BASE}/analysis`, {
-          headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
-        });
-        if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-        setAnalysis(await res.json());
+        const [analysisRes, coursesRes, activitiesRes] = await Promise.all([
+          authFetch('/analysis/'),
+          authFetch('/courses/'),
+          authFetch('/activities/'),
+        ]);
+
+        if ([analysisRes, coursesRes, activitiesRes].some((r) => r.status === 401)) {
+          return handleSessionExpired();
+        }
+        if (!analysisRes.ok) throw new Error(`Error ${analysisRes.status}: ${analysisRes.statusText}`);
+
+        setAnalysis(adaptAnalysisResponse(await analysisRes.json()));
+        setCourses(coursesRes.ok ? await coursesRes.json() : []);
+        setActivities(activitiesRes.ok ? await activitiesRes.json() : []);
       } catch (err) {
-        console.error('Error al cargar el análisis:', err);
+        console.error('Error al cargar el calendario:', err);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchAnalysis();
-  }, []);
+    fetchAll();
+  }, [handleSessionExpired]);
+
+  // Sesiones de clase (curso.schedule) que caen en `fecha`. day_of_week de schedule usa
+  // la misma convención que Date.getDay(): 0=Domingo ... 6=Sábado.
+  const sessionsForDate = useCallback(
+    (fecha) => {
+      const iso = toLocalISO(fecha);
+      const dow = fecha.getDay();
+      const result = [];
+      courses.forEach((course) => {
+        const sched = course.schedule;
+        if (!sched || iso < sched.term_start || iso > sched.term_end) return;
+        (sched.sessions ?? []).forEach((session) => {
+          if (session.day_of_week === dow) result.push({ course, session });
+        });
+      });
+      return result;
+    },
+    [courses]
+  );
+
+  const activitiesForDate = useCallback(
+    (fecha) => activities.filter((a) => a.due_date === toLocalISO(fecha)),
+    [activities]
+  );
 
   const today = useMemo(() => new Date(), []);
   const esMesActual = viewDate.getMonth() === today.getMonth() && viewDate.getFullYear() === today.getFullYear();
@@ -67,8 +108,8 @@ const CalendarioPage = () => {
 
   // Selecciona "hoy" por defecto en cuanto llegan los datos
   useEffect(() => {
-    if (analysis && !selectedDate) setSelectedDate(today);
-  }, [analysis, today, selectedDate]);
+    if (!loading && !selectedDate) setSelectedDate(today);
+  }, [loading, today, selectedDate]);
 
   const celdas = useMemo(() => {
     const year = viewDate.getFullYear();
@@ -112,6 +153,8 @@ const CalendarioPage = () => {
   const seleccionInfo = selectedDate ? datosDia(selectedDate) : null;
   const recomendacionSeleccion =
     seleccionInfo && analysis?.recomendaciones?.find((r) => r.includes(nombreDia(selectedDate)));
+  const sesionesSeleccion = selectedDate ? sessionsForDate(selectedDate) : [];
+  const actividadesSeleccion = selectedDate ? activitiesForDate(selectedDate) : [];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -167,6 +210,10 @@ const CalendarioPage = () => {
                 if (!fecha) return <div key={`blank-${i}`} className="min-h-[64px] sm:min-h-[76px]" />;
 
                 const info = datosDia(fecha);
+                const sesionesDia = sessionsForDate(fecha);
+                const actividadesDia = activitiesForDate(fecha);
+                const tieneEventos = sesionesDia.length > 0 || actividadesDia.length > 0;
+                const esSeleccionable = Boolean(info || tieneEventos);
                 const esHoy = isSameDay(fecha, today);
                 const esSeleccionado = selectedDate && isSameDay(fecha, selectedDate);
                 const esFinDeSemana = [5, 6].includes((fecha.getDay() + 6) % 7);
@@ -175,11 +222,11 @@ const CalendarioPage = () => {
                 return (
                   <button
                     key={fecha.toISOString()}
-                    onClick={() => info && setSelectedDate(fecha)}
-                    disabled={!info}
+                    onClick={() => esSeleccionable && setSelectedDate(fecha)}
+                    disabled={!esSeleccionable}
                     className={`min-h-[64px] sm:min-h-[76px] rounded-xl border flex flex-col items-start justify-between p-2 text-left transition-all
                       ${estilo ? `${estilo.bg} ${estilo.border}` : 'border-transparent'}
-                      ${info ? 'cursor-pointer hover:brightness-125' : 'cursor-default'}
+                      ${esSeleccionable ? 'cursor-pointer hover:brightness-125' : 'cursor-default'}
                       ${esSeleccionado ? 'ring-2 ring-white/70' : ''}
                       ${esHoy && !estilo ? 'ring-1 ring-[#7B3FE4]/60' : ''}
                     `}
@@ -192,38 +239,90 @@ const CalendarioPage = () => {
                         {info.horas_asignadas}h/{info.horas_disponibles}h
                       </span>
                     )}
+                    {tieneEventos && (
+                      <span className="flex items-center gap-1">
+                        {sesionesDia.length > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#9b66f2]" title="Tienes clase" />
+                        )}
+                        {actividadesDia.length > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Actividad pendiente" />
+                        )}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
 
             {/* Panel de detalle del día seleccionado */}
-            {seleccionInfo && selectedDate && (
-              <div className={`mt-6 pt-5 border-t border-gray-800`}>
+            {selectedDate && (
+              <div className="mt-6 pt-5 border-t border-gray-800 space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <p className="text-white font-semibold text-sm">
                       {nombreDia(selectedDate)} {selectedDate.getDate()} de {MESES[selectedDate.getMonth()]}
                     </p>
-                    <p className="text-gray-500 text-xs mt-0.5">
-                      {seleccionInfo.horas_asignadas}h ocupadas de {seleccionInfo.horas_disponibles}h disponibles ·{' '}
-                      {Math.round(seleccionInfo.pct)}%
-                    </p>
+                    {seleccionInfo ? (
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        {seleccionInfo.horas_asignadas}h ocupadas de {seleccionInfo.horas_disponibles}h disponibles ·{' '}
+                        {Math.round(seleccionInfo.pct)}%
+                      </p>
+                    ) : (
+                      <p className="text-gray-500 text-xs mt-0.5">Sin datos de carga para este día</p>
+                    )}
                   </div>
-                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${RIESGO[seleccionInfo.nivel].bg} ${RIESGO[seleccionInfo.nivel].text}`}>
-                    {RIESGO[seleccionInfo.nivel].label}
-                  </span>
+                  {seleccionInfo && (
+                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${RIESGO[seleccionInfo.nivel].bg} ${RIESGO[seleccionInfo.nivel].text}`}>
+                      {RIESGO[seleccionInfo.nivel].label}
+                    </span>
+                  )}
                 </div>
 
-                {recomendacionSeleccion ? (
-                  <p className="text-xs text-gray-300 bg-black/20 rounded-lg px-3 py-2 mt-3">{recomendacionSeleccion}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-3">Sin alertas para este día.</p>
+                {seleccionInfo && (
+                  recomendacionSeleccion ? (
+                    <p className="text-xs text-gray-300 bg-black/20 rounded-lg px-3 py-2">{recomendacionSeleccion}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500">Sin alertas para este día.</p>
+                  )
+                )}
+
+                {sesionesSeleccion.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-2">Clases</p>
+                    <div className="space-y-1.5">
+                      {sesionesSeleccion.map(({ course, session }, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 text-xs bg-black/20 rounded-lg px-3 py-2">
+                          <span className="text-gray-300 truncate">{course.name}</span>
+                          <span className="text-gray-500 shrink-0">
+                            {session.start_time?.slice(0, 5)}–{session.end_time?.slice(0, 5)} · {session.type}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {actividadesSeleccion.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-2">Actividades</p>
+                    <div className="space-y-1.5">
+                      {actividadesSeleccion.map((act) => (
+                        <div key={act.id} className="flex items-center justify-between gap-3 text-xs bg-black/20 rounded-lg px-3 py-2">
+                          <span className="text-gray-300 truncate">
+                            {act.name} <span className="text-gray-600">· {act.type}</span>
+                          </span>
+                          <span className="text-gray-500 shrink-0">
+                            {act.estimated_hours}h · {act.priority ?? '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <button
                   onClick={() => navigate('/actividades')}
-                  className="mt-3 flex items-center gap-1.5 text-xs font-medium text-[#9b66f2] hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-medium text-[#9b66f2] hover:text-white transition-colors"
                 >
                   Ir a registrar algo este día <ArrowRight size={13} />
                 </button>
@@ -242,6 +341,12 @@ const CalendarioPage = () => {
                 <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`} /> {key === 'bajo' ? 'Carga baja' : key === 'medio' ? 'Carga media' : r.label}
               </span>
             ))}
+            <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-white/5 rounded-full px-2.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9b66f2]" /> Clase
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-white/5 rounded-full px-2.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Actividad
+            </span>
           </div>
 
           <div className="flex items-center gap-2 mb-4">
