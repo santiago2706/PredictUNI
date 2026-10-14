@@ -35,6 +35,12 @@ def health_check():
     return {"status": "ok", "message": "PredictUNI API is running"}
 
 
+@app.head("/", include_in_schema=False)
+@app.head("/health", include_in_schema=False)
+def health_check_head():
+    return None
+
+
 
 
 @app.post("/db_prueba")
