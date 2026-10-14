@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
+import { authFetch, clearSession, SESSION_EXPIRED_MESSAGE } from '../../utils/api';
 
 const DIAS = [
   { key: 0, short: 'Lun', label: 'Lunes' },
@@ -12,15 +14,51 @@ const DIAS = [
 ];
 
 const INITIAL_HOURS = { 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' };
+const MAX_HORAS_DIA = 24;
 
 const WeeklyAvailabilityForm = ({ onSaved }) => {
+  const navigate = useNavigate();
   const [hours, setHours] = useState(INITIAL_HOURS);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
-const MAX_HORAS_DIA = 24;
-const handleChange = (day, value) => {
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
+  }, [navigate]);
+
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoading(true);
+      try {
+        const res = await authFetch('/availability/');
+
+        if (res.status === 401) return handleSessionExpired();
+        if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
+
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setHours((prev) => {
+            const next = { ...prev };
+            data.forEach((day) => {
+              next[day.day_of_week] = String(day.available_hours);
+            });
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error('Error al cargar la disponibilidad:', err);
+        setError('No se pudo cargar tu disponibilidad guardada.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAvailability();
+  }, [handleSessionExpired]);
+
+  const handleChange = (day, value) => {
     if (value !== '' && !/^\d*$/.test(value)) return;
     if (value !== '' && Number(value) > MAX_HORAS_DIA) return;
     setHours((prev) => ({ ...prev, [day]: value }));
@@ -30,7 +68,7 @@ const handleChange = (day, value) => {
 
   const totalHoras = DIAS.reduce((sum, { key }) => sum + (Number(hours[key]) || 0), 0);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const allFilled = DIAS.every(({ key }) => hours[key] !== '');
@@ -40,17 +78,33 @@ const handleChange = (day, value) => {
     }
 
     setIsLoading(true);
+    setError('');
 
-    // Payload listo para POST /availability (S2-01): arreglo exacto de 7 días,
-    // índice 0 = Lunes ... índice 6 = Domingo. Por ahora se simula el envío.
-    const payload = DIAS.map(({ key }) => Number(hours[key]));
-    console.log('Payload de Disponibilidad listo:', payload);
+    const payload = {
+      availability: DIAS.map(({ key }) => ({
+        day_of_week: key,
+        available_hours: Number(hours[key]),
+      })),
+    };
 
-    setTimeout(() => {
-      onSaved?.(payload);
+    try {
+      const res = await authFetch('/availability/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 401) return handleSessionExpired();
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'No se pudo guardar la disponibilidad.');
+
+      onSaved?.(data);
       setSavedAt(new Date());
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -68,8 +122,9 @@ const handleChange = (day, value) => {
                 aria-label={`Horas libres el ${label}`}
                 value={hours[key]}
                 onChange={(e) => handleChange(key, e.target.value)}
-                placeholder="—"
-                className="w-full bg-transparent text-center text-2xl font-semibold text-white placeholder-gray-700 border-b-2 border-transparent focus:border-[#7B3FE4] outline-none pb-1 transition-colors"
+                placeholder={loading ? '···' : '—'}
+                disabled={loading}
+                className="w-full bg-transparent text-center text-2xl font-semibold text-white placeholder-gray-700 border-b-2 border-transparent focus:border-[#7B3FE4] outline-none pb-1 transition-colors disabled:opacity-50"
               />
               <span className="text-[11px] text-gray-600">hrs</span>
             </label>
@@ -93,7 +148,7 @@ const handleChange = (day, value) => {
       {error && <p className="text-xs text-red-400 mt-3 font-medium">{error}</p>}
 
       <div className="mt-5">
-        <Button type="submit" isLoading={isLoading}>
+        <Button type="submit" isLoading={isLoading} disabled={loading || isLoading}>
           Guardar disponibilidad
         </Button>
       </div>
