@@ -29,6 +29,12 @@ app.include_router(courses_router)
 app.include_router(availability_router)
 app.include_router(activities_router)
 
+@app.get("/", tags=["Health Check"])
+@app.get("/health", tags=["Health Check"])
+def health_check():
+    return {"status": "ok", "message": "PredictUNI API is running"}
+
+
 
 
 @app.post("/db_prueba")
