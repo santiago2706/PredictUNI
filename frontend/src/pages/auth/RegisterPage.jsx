@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../layouts/AuthLayout';
 import InputField from '../../components/ui/InputField';
 import Button from '../../components/ui/Button';
+import { API_BASE } from '../../utils/api';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -36,7 +37,7 @@ const RegisterPage = () => {
     setSuccessMessage('');
     
     try {
-      const response = await fetch('http://localhost:8000/auth/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
