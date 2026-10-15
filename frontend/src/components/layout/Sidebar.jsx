@@ -1,4 +1,4 @@
-import React from 'react';
+import Brand from '../ui/Brand';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, BookOpen, Calendar, ClipboardList, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
@@ -31,10 +31,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       >
         <div className="flex items-center justify-between px-5 h-16 border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#7B3FE4] rounded-lg flex items-center justify-center font-bold text-white text-sm">
-              P
-            </div>
-            <span className="text-lg font-bold text-white tracking-tight">PredictUNI</span>
+            <Brand compact />
           </div>
           <button
             onClick={onClose}

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { simulationError, apiError } from '../../utils/validation';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, FlaskConical, CalendarClock, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import RiskCard from '../../components/dashboard/RiskCard';
@@ -25,10 +26,12 @@ const DashboardSkeleton = () => (
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const simulationPending = useRef(false);
 
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const [simEnabled, setSimEnabled] = useState(false);
   const [simDay, setSimDay] = useState('Lunes');
@@ -42,35 +45,43 @@ const DashboardPage = () => {
     navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
   }, [navigate]);
 
-  const fetchAnalysis = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAnalysis = async () => {
+      try {
+        const res = await authFetch('/analysis/');
+        if (cancelled) return;
+
+        if (res.status === 401) return handleSessionExpired();
+        if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
+
+        const data = await res.json();
+        if (!cancelled) setAnalysis(data);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error al cargar el análisis:', err);
+        setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchAnalysis();
+    return () => { cancelled = true; };
+  }, [handleSessionExpired, refreshVersion]);
+
+  // La carga inicial ya parte de loading=true; reiniciar solo al actualizar.
+  const handleRefresh = () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await authFetch('/analysis/');
-
-      if (res.status === 401) return handleSessionExpired();
-      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-
-      setAnalysis(await res.json());
-    } catch (err) {
-      console.error('Error al cargar el análisis:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [handleSessionExpired]);
-
-  useEffect(() => {
-    fetchAnalysis();
-  }, [fetchAnalysis]);
+    setRefreshVersion(version => version + 1);
+  };
 
   const runSimulation = useCallback(async () => {
+    if (simulationPending.current) return;
+    const invalid = simulationError(simDay, simHours);
+    if (invalid) { setSimError(invalid); return; }
     const horas = Number(simHours);
-    if (simHours === '' || Number.isNaN(horas)) {
-      setSimError('Ingresa un número de horas válido.');
-      return;
-    }
-
+    simulationPending.current = true;
     setSimLoading(true);
     setSimError('');
     try {
@@ -82,7 +93,7 @@ const DashboardPage = () => {
       if (res.status === 401) return handleSessionExpired();
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'No se pudo simular el escenario.');
+      if (!res.ok) throw new Error(apiError(data.detail, 'No se pudo simular el escenario.'));
 
       setSimulatedAnalysis(data);
     } catch (err) {
@@ -90,6 +101,7 @@ const DashboardPage = () => {
       setSimError(err.message);
       setSimEnabled(false);
     } finally {
+      simulationPending.current = false;
       setSimLoading(false);
     }
   }, [simDay, simHours, handleSessionExpired]);
@@ -120,7 +132,7 @@ const DashboardPage = () => {
           </p>
         </div>
         <button
-          onClick={fetchAnalysis}
+          onClick={handleRefresh}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#7B3FE4]/20 border border-[#7B3FE4]/30 text-[#9b66f2] text-sm font-medium hover:bg-[#7B3FE4]/30 transition-colors disabled:opacity-50"
         >
@@ -199,10 +211,11 @@ const DashboardPage = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 mt-4 items-end">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-400">Día a modificar</label>
+            <label htmlFor="simulation-day" className="text-xs text-gray-400">Día a modificar</label>
             <select
               value={simDay}
-              onChange={(e) => setSimDay(e.target.value)}
+              onChange={(e) => { setSimDay(e.target.value); setSimError(simulationError(e.target.value, simHours)); }}
+              id="simulation-day" aria-describedby={simError ? "simulation-error" : undefined} aria-invalid={!!simError}
               className="px-3 py-2.5 bg-[#1A1025] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7B3FE4]"
             >
               {DIAS_ORDEN.map((d) => (
@@ -214,11 +227,14 @@ const DashboardPage = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-400">Horas extra (+/-)</label>
+            <label htmlFor="simulation-hours" className="text-xs text-gray-400">Horas extra (+/-)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="text"
               value={simHours}
-              onChange={(e) => setSimHours(e.target.value)}
+              onChange={(e) => { setSimHours(e.target.value); setSimError(simulationError(simDay, e.target.value)); }}
+              onBlur={() => setSimError(simulationError(simDay, simHours))}
+              id="simulation-hours" aria-describedby={simError ? "simulation-error" : undefined} aria-invalid={!!simError}
               className="px-3 py-2.5 bg-[#1A1025] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7B3FE4]"
             />
           </div>
@@ -228,7 +244,7 @@ const DashboardPage = () => {
           </Button>
         </div>
 
-        {simError && <p className="text-red-400 text-xs mt-3">{simError}</p>}
+        {simError && <p id="simulation-error" role="alert" className="text-red-400 text-xs mt-3">{simError}</p>}
       </div>
 
       {loading && <DashboardSkeleton />}
@@ -238,7 +254,7 @@ const DashboardPage = () => {
           <p className="text-red-400 font-medium">No se pudo conectar con el servidor</p>
           <p className="text-gray-400 text-sm mt-1">{error}</p>
           <button
-            onClick={fetchAnalysis}
+            onClick={handleRefresh}
             className="mt-4 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 transition-colors"
           >
             Reintentar

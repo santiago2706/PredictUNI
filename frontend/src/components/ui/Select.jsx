@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -14,6 +13,8 @@ const Select = ({ label, id, error, options, placeholder, className, ...props })
       <div className="relative">
         <select
           id={id}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${id}-error` : undefined}
           className={cn(
             'w-full appearance-none px-4 py-3 pr-10 bg-[#1A1025] border rounded-lg text-white',
             'focus:outline-none focus:ring-2 transition-all duration-200',
@@ -40,7 +41,7 @@ const Select = ({ label, id, error, options, placeholder, className, ...props })
       </div>
 
       {error && (
-        <span className="text-xs text-red-400 mt-1 font-medium animate-pulse">{error}</span>
+        <span id={`${id}-error`} role="alert" className="text-xs text-red-400 mt-1 font-medium">{error}</span>
       )}
     </div>
   );
