@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
@@ -32,6 +32,7 @@ const ActividadesPage = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [isModalOpen, setModalOpen] = useState(false);
 
   const handleSessionExpired = useCallback(() => {
@@ -39,28 +40,36 @@ const ActividadesPage = () => {
     navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
   }, [navigate]);
 
-  const fetchActivities = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    const fetchActivities = async () => {
+      try {
+        const res = await authFetch('/activities/');
+        if (cancelled) return;
+
+        if (res.status === 401) return handleSessionExpired();
+        if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
+
+        const data = await res.json();
+        if (!cancelled) setActivities(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error al cargar las actividades:', err);
+        setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchActivities();
+    return () => { cancelled = true; };
+  }, [handleSessionExpired, refreshVersion]);
+
+  // La carga inicial ya parte de loading=true; reiniciar solo al actualizar.
+  const handleRefresh = () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await authFetch('/activities/');
-
-      if (res.status === 401) return handleSessionExpired();
-      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-
-      const data = await res.json();
-      setActivities(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error al cargar las actividades:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [handleSessionExpired]);
-
-  useEffect(() => {
-    fetchActivities();
-  }, [fetchActivities]);
+    setRefreshVersion(version => version + 1);
+  };
 
   const handleActivityCreated = (activity) => {
     setActivities((prev) =>
@@ -106,7 +115,7 @@ const ActividadesPage = () => {
             <p className="text-red-400 font-medium text-sm">No se pudo conectar con el servidor</p>
             <p className="text-gray-400 text-xs mt-1">{error}</p>
             <button
-              onClick={fetchActivities}
+              onClick={handleRefresh}
               className="mt-4 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 transition-colors"
             >
               Reintentar

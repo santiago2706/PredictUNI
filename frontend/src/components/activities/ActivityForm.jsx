@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { activityErrors, apiError, localDate } from '../../utils/validation';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import InputField from '../ui/InputField';
 import Select from '../ui/Select';
@@ -25,11 +26,11 @@ const PRIORIDAD_OPTIONS = [
   { value: 'Alta', label: 'Alta' },
 ];
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => localDate();
 const maxDateISO = () => {
   const d = new Date();
   d.setFullYear(d.getFullYear() + 1);
-  return d.toISOString().split('T')[0];
+  return localDate(d);
 };
 
 const INITIAL_STATE = {
@@ -43,10 +44,9 @@ const INITIAL_STATE = {
   prioridad: '',
 };
 
-const MAX_HORAS = 100;
-
 const ActivityForm = ({ onActivityCreated }) => {
   const navigate = useNavigate();
+  const pending = useRef(false);
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -69,10 +69,10 @@ const ActivityForm = ({ onActivityCreated }) => {
         if (res.status === 401) return handleSessionExpired();
         if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setCourses(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error('Error al cargar los cursos:', err);
+        setServerError('No se pudieron cargar los cursos. Vuelve a abrir el formulario. ' + err.message);
       } finally {
         setCoursesLoading(false);
       }
@@ -85,50 +85,23 @@ const ActivityForm = ({ onActivityCreated }) => {
   const handleChange = (e) => {
     const { id, value } = e.target;
 
-    if (id === 'horas_estimadas' && value !== '' && !/^\d*$/.test(value)) return;
-    if (id === 'horas_estimadas' && value !== '' && Number(value) > MAX_HORAS) return;
 
     setFormData((prev) => ({ ...prev, [id]: value }));
-    setErrors((prev) => ({ ...prev, [id]: undefined }));
-  };
-
-  const handleDateBlur = () => {
-    if (!formData.fecha_entrega) return;
-    if (formData.fecha_entrega < todayISO()) {
-      setFormData((prev) => ({ ...prev, fecha_entrega: todayISO() }));
-    } else if (formData.fecha_entrega > maxDateISO()) {
-      setFormData((prev) => ({ ...prev, fecha_entrega: maxDateISO() }));
-    }
+    setErrors(activityErrors({ ...formData, [id]: value }, courses, todayISO(), maxDateISO()));
   };
 
   const validate = () => {
-    const next = {};
-    if (!formData.curso_id) next.curso_id = 'Selecciona el curso';
-    if (!formData.nombre.trim()) next.nombre = 'Ingresa el nombre de la actividad';
-    if (!formData.tipo) next.tipo = 'Selecciona el tipo';
-    if (formData.tipo === 'Otro' && !formData.tipo_otro.trim()) {
-      next.tipo_otro = 'Especifica el tipo de actividad';
-    }
-    if (!formData.fecha_entrega) {
-      next.fecha_entrega = 'La fecha debe ser hoy o futura';
-    } else if (formData.fecha_entrega > maxDateISO()) {
-      next.fecha_entrega = 'La fecha es demasiado lejana';
-    } else if (formData.fecha_entrega < todayISO()) {
-      next.fecha_entrega = 'La fecha debe ser hoy o futura';
-    }
-    if (!formData.horas_estimadas || Number(formData.horas_estimadas) <= 0) {
-      next.horas_estimadas = 'Ingresa horas estimadas mayores a 0';
-    }
-    if (!formData.peso_dificultad) next.peso_dificultad = 'Selecciona la dificultad';
-    if (!formData.prioridad) next.prioridad = 'Selecciona la prioridad';
+    const next = activityErrors(formData, courses, todayISO(), maxDateISO());
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (pending.current) return;
     if (!validate() || isLoading) return;
 
+    pending.current = true;
     setIsLoading(true);
     setServerError('');
 
@@ -151,19 +124,20 @@ const ActivityForm = ({ onActivityCreated }) => {
       if (res.status === 401) return handleSessionExpired();
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'No se pudo registrar la actividad.');
+      if (!res.ok) throw new Error(apiError(data.detail, 'No se pudo registrar la actividad.'));
 
       onActivityCreated?.(data);
       setFormData(INITIAL_STATE);
     } catch (error) {
       setServerError(error.message);
     } finally {
+      pending.current = false;
       setIsLoading(false);
     }
   };
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+    <form className="space-y-5" onSubmit={handleSubmit} noValidate onBlur={validate}>
       {!coursesLoading && courses.length === 0 ? (
         <p className="text-sm text-gray-400 bg-black/20 rounded-lg px-3 py-2">
           Todavía no tienes cursos registrados. Registra uno primero en la sección Cursos.
@@ -219,7 +193,6 @@ const ActivityForm = ({ onActivityCreated }) => {
         max={maxDateISO()}
         value={formData.fecha_entrega}
         onChange={handleChange}
-        onBlur={handleDateBlur}
         error={errors.fecha_entrega}
       />
 
@@ -257,10 +230,10 @@ const ActivityForm = ({ onActivityCreated }) => {
       />
 
       {serverError && (
-        <p className="text-red-400 text-sm text-center font-medium">{serverError}</p>
+        <p role="alert" className="text-red-400 text-sm text-center font-medium">{serverError}</p>
       )}
 
-      <Button type="submit" isLoading={isLoading}>
+      <Button type="submit" isLoading={isLoading} disabled={coursesLoading || !courses.length}>
         Registrar actividad
       </Button>
     </form>

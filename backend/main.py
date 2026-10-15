@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,10 +14,21 @@ import json
 
 app = FastAPI(title="PredictUNI Mock Auth API")
 
-# 1. Configuración de CORS (Crucial para que React pueda conectarse)
+# 1. Configuración de CORS (Permite localhost y el frontend en Vercel)
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://predict-uni.vercel.app",
+]
+
+frontend_env = os.getenv("FRONTEND_URL")
+if frontend_env and frontend_env not in allowed_origins:
+    allowed_origins.append(frontend_env)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, cámbialo por "http://localhost:5173"
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*predict-uni.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

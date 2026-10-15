@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, RefreshCw, Clock } from 'lucide-react';
 import CourseForm from '../../components/courses/CourseForm';
@@ -12,34 +12,43 @@ const CursosPage = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const handleSessionExpired = useCallback(() => {
     clearSession();
     navigate('/login', { replace: true, state: { message: SESSION_EXPIRED_MESSAGE } });
   }, [navigate]);
 
-  const fetchCourses = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCourses = async () => {
+      try {
+        const response = await authFetch('/courses/');
+        if (cancelled) return;
+
+        if (response.status === 401) return handleSessionExpired();
+        if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+
+        const data = await response.json();
+        if (!cancelled) setCourses(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error al cargar los cursos:', err);
+        setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchCourses();
+    return () => { cancelled = true; };
+  }, [handleSessionExpired, refreshVersion]);
+
+  // La carga inicial ya parte de loading=true; reiniciar solo al actualizar.
+  const handleRefresh = () => {
     setLoading(true);
     setError(null);
-    try {
-      const response = await authFetch('/courses/');
-
-      if (response.status === 401) return handleSessionExpired();
-      if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
-
-      const data = await response.json();
-      setCourses(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error al cargar los cursos:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [handleSessionExpired]);
-
-  useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
+    setRefreshVersion(version => version + 1);
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -52,7 +61,7 @@ const CursosPage = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold">Tus cursos</h2>
           <button
-            onClick={fetchCourses}
+            onClick={handleRefresh}
             disabled={loading}
             className="flex items-center gap-1.5 text-xs font-medium text-[#9b66f2] hover:text-white transition-colors disabled:opacity-50"
           >
@@ -74,7 +83,7 @@ const CursosPage = () => {
             <p className="text-red-400 text-sm font-medium">No se pudo conectar con el servidor</p>
             <p className="text-gray-500 text-xs mt-1">{error}</p>
             <button
-              onClick={fetchCourses}
+              onClick={handleRefresh}
               className="mt-4 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 transition-colors"
             >
               Reintentar
