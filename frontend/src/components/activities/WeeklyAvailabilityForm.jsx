@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { availabilityErrors, integer, apiError } from '../../utils/validation';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 import { authFetch, clearSession, SESSION_EXPIRED_MESSAGE } from '../../utils/api';
@@ -14,13 +15,15 @@ const DIAS = [
 ];
 
 const INITIAL_HOURS = { 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' };
-const MAX_HORAS_DIA = 24;
+
 
 const WeeklyAvailabilityForm = ({ onSaved }) => {
   const navigate = useNavigate();
+  const pending = useRef(false);
   const [hours, setHours] = useState(INITIAL_HOURS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
@@ -38,7 +41,7 @@ const WeeklyAvailabilityForm = ({ onSaved }) => {
         if (res.status === 401) return handleSessionExpired();
         if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (Array.isArray(data) && data.length > 0) {
           setHours((prev) => {
             const next = { ...prev };
@@ -59,24 +62,24 @@ const WeeklyAvailabilityForm = ({ onSaved }) => {
   }, [handleSessionExpired]);
 
   const handleChange = (day, value) => {
-    if (value !== '' && !/^\d*$/.test(value)) return;
-    if (value !== '' && Number(value) > MAX_HORAS_DIA) return;
     setHours((prev) => ({ ...prev, [day]: value }));
     setError('');
+    setErrors(availabilityErrors({ ...hours, [day]: value }));
     setSavedAt(null);
   };
 
-  const totalHoras = DIAS.reduce((sum, { key }) => sum + (Number(hours[key]) || 0), 0);
+  const totalHoras = DIAS.reduce((sum, { key }) => sum + (integer(hours[key], 0, 24) ? Number(hours[key]) : 0), 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (pending.current) return;
 
-    const allFilled = DIAS.every(({ key }) => hours[key] !== '');
-    if (!allFilled) {
-      setError('Ingresa las horas libres de los 7 días.');
-      return;
-    }
+    if (loading || isLoading) return;
+    const next = availabilityErrors(hours);
+    setErrors(next);
+    if (Object.keys(next).length) return;
 
+    pending.current = true;
     setIsLoading(true);
     setError('');
 
@@ -96,13 +99,14 @@ const WeeklyAvailabilityForm = ({ onSaved }) => {
       if (res.status === 401) return handleSessionExpired();
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'No se pudo guardar la disponibilidad.');
+      if (!res.ok) throw new Error(apiError(data.detail, 'No se pudo guardar la disponibilidad.'));
 
       onSaved?.(data);
       setSavedAt(new Date());
     } catch (err) {
       setError(err.message);
     } finally {
+      pending.current = false;
       setIsLoading(false);
     }
   };
@@ -120,6 +124,9 @@ const WeeklyAvailabilityForm = ({ onSaved }) => {
                 type="text"
                 inputMode="numeric"
                 aria-label={`Horas libres el ${label}`}
+                aria-invalid={!!errors[key]}
+                aria-describedby={errors[key] ? `day-error-${key}` : undefined}
+                onBlur={() => setErrors(availabilityErrors(hours))}
                 value={hours[key]}
                 onChange={(e) => handleChange(key, e.target.value)}
                 placeholder={loading ? '···' : '—'}
@@ -145,6 +152,7 @@ const WeeklyAvailabilityForm = ({ onSaved }) => {
         </div>
       </div>
 
+      {DIAS.filter(({ key }) => errors[key]).map(({ key, label }) => <p key={key} id={`day-error-${key}`} role="alert" className="text-xs text-red-400 mt-2">{label}: {errors[key]}</p>)}
       {error && <p className="text-xs text-red-400 mt-3 font-medium">{error}</p>}
 
       <div className="mt-5">

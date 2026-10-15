@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CalendarDays, TrendingUp, ArrowRight } from 'lucide-react';
 import { adaptAnalysisResponse } from '../../utils/analysis';
@@ -31,8 +31,9 @@ const CalendarioPage = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [viewDate, setViewDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [today] = useState(() => new Date());
+  const [viewDate, setViewDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(today);
 
   const handleSessionExpired = useCallback(() => {
     clearSession();
@@ -92,7 +93,6 @@ const CalendarioPage = () => {
     [activities]
   );
 
-  const today = useMemo(() => new Date(), []);
   const esMesActual = viewDate.getMonth() === today.getMonth() && viewDate.getFullYear() === today.getFullYear();
 
   const { inicioSemana, finSemana } = useMemo(() => {
@@ -105,11 +105,6 @@ const CalendarioPage = () => {
     fin.setHours(23, 59, 59, 999);
     return { inicioSemana: inicio, finSemana: fin };
   }, [today]);
-
-  // Selecciona "hoy" por defecto en cuanto llegan los datos
-  useEffect(() => {
-    if (!loading && !selectedDate) setSelectedDate(today);
-  }, [loading, today, selectedDate]);
 
   const celdas = useMemo(() => {
     const year = viewDate.getFullYear();

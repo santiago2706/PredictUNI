@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { courseErrors, apiError } from '../../utils/validation';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import InputField from '../ui/InputField';
@@ -19,6 +20,7 @@ const INITIAL_STATE = { name: '', code: '', credits: '', difficulty: '' };
 
 const CourseForm = ({ onCourseCreated }) => {
   const navigate = useNavigate();
+  const pending = useRef(false);
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -31,22 +33,9 @@ const CourseForm = ({ onCourseCreated }) => {
   const handleChange = (e) => {
     const { id, value } = e.target;
 
-  // Créditos: 1 dígito del 1 al 9, con hasta 1 decimal opcional (ej. 4, 4.5)
-    if (id === 'credits' && value !== '' && !/^[1-9]?(\.\d?)?$/.test(value)) return;
-
     setFormData((prev) => ({ ...prev, [id]: value }));
-    setErrors((prev) => ({ ...prev, [id]: undefined }));
+    setErrors(courseErrors({ ...formData, [id]: value }, hasSchedule, term, sessions));
   };
-  const handleCreditsBlur = () => {
-    const val = formData.credits;
-    if (!val) return;
-    if (!val.includes('.')) {
-      setFormData((prev) => ({ ...prev, credits: `${val}.0` }));
-    } else if (val.endsWith('.')) {
-      setFormData((prev) => ({ ...prev, credits: `${val}0` }));
-    }
-  };
-
   const toggleSchedule = () => {
     setHasSchedule((prev) => !prev);
     setErrors((prev) => ({ ...prev, term_start: undefined, term_end: undefined }));
@@ -54,47 +43,29 @@ const CourseForm = ({ onCourseCreated }) => {
 
   const updateTerm = (field, value) => {
     setTerm((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setErrors(courseErrors(formData, hasSchedule, { ...term, [field]: value }, sessions));
   };
 
   const updateSession = (index, field, value) => {
     setSessions((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
-    setErrors((prev) => ({ ...prev, [`session_${index}`]: undefined }));
+    setErrors(courseErrors(formData, hasSchedule, term, sessions.map((s, i) => i === index ? { ...s, [field]: value } : s)));
   };
 
   const addSession = () => setSessions((prev) => [...prev, emptySession()]);
   const removeSession = (index) => setSessions((prev) => prev.filter((_, i) => i !== index));
 
   const validate = () => {
-    const next = {};
-    if (!formData.name.trim()) next.name = 'Ingresa el nombre del curso';
-    if (!formData.code.trim()) next.code = 'Ingresa el código del curso';
-    if (!formData.credits) next.credits = 'Ingresa los créditos';
-    if (!formData.difficulty) next.difficulty = 'Selecciona la dificultad';
-
-    if (hasSchedule) {
-      if (!term.term_start) next.term_start = 'Ingresa el inicio de ciclo';
-      if (!term.term_end) next.term_end = 'Ingresa el fin de ciclo';
-      if (term.term_start && term.term_end && term.term_end < term.term_start) {
-        next.term_end = 'Debe ser posterior al inicio de ciclo';
-      }
-      sessions.forEach((s, i) => {
-        if (!s.start_time || !s.end_time) {
-          next[`session_${i}`] = 'Completa la hora de inicio y fin';
-        } else if (s.end_time <= s.start_time) {
-          next[`session_${i}`] = 'La hora de fin debe ser posterior a la de inicio';
-        }
-      });
-    }
-
+    const next = courseErrors(formData, hasSchedule, term, sessions);
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (pending.current) return;
     if (!validate() || isLoading) return;
 
+    pending.current = true;
     setIsLoading(true);
     setServerError('');
 
@@ -130,10 +101,10 @@ const CourseForm = ({ onCourseCreated }) => {
         return;
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.detail || 'No se pudo registrar el curso. Inténtalo nuevamente.');
+        throw new Error(apiError(data.detail, 'No se pudo registrar el curso. Inténtalo nuevamente.'));
       }
 
       onCourseCreated?.(data);
@@ -144,12 +115,13 @@ const CourseForm = ({ onCourseCreated }) => {
     } catch (error) {
       setServerError(error.message);
     } finally {
+      pending.current = false;
       setIsLoading(false);
     }
   };
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+    <form className="space-y-5" onSubmit={handleSubmit} noValidate onBlur={validate}>
       <InputField
         label="Nombre del curso"
         id="name"
@@ -162,13 +134,12 @@ const CourseForm = ({ onCourseCreated }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <InputField
-          label="Código"
+          label="Código (opcional)"
           id="code"
           type="text"
           placeholder="MA-101"
           value={formData.code}
           onChange={handleChange}
-          onBlur={handleCreditsBlur}
           error={errors.code}
         />
 
@@ -242,6 +213,7 @@ const CourseForm = ({ onCourseCreated }) => {
 
             <div className="space-y-3">
               <p className="text-sm font-medium text-gray-200">Sesiones semanales</p>
+              {errors.schedule && <p role="alert" className="text-xs text-red-400">{errors.schedule}</p>}
 
               {sessions.map((session, i) => (
                 <div key={i} className="rounded-lg border border-gray-800 bg-[#1A1025] p-3 space-y-3">
@@ -249,6 +221,8 @@ const CourseForm = ({ onCourseCreated }) => {
                     <Select
                       label="Día"
                       id={`session_day_${i}`}
+                      aria-invalid={!!errors[`session_${i}`]}
+                      aria-describedby={errors[`session_${i}`] ? `session_error_${i}` : undefined}
                       options={DAY_OPTIONS}
                       value={String(session.day_of_week)}
                       onChange={(e) => updateSession(i, 'day_of_week', e.target.value)}
@@ -256,6 +230,8 @@ const CourseForm = ({ onCourseCreated }) => {
                     <InputField
                       label="Inicio"
                       id={`session_start_${i}`}
+                      aria-invalid={!!errors[`session_${i}`]}
+                      aria-describedby={errors[`session_${i}`] ? `session_error_${i}` : undefined}
                       type="time"
                       value={session.start_time}
                       onChange={(e) => updateSession(i, 'start_time', e.target.value)}
@@ -263,6 +239,8 @@ const CourseForm = ({ onCourseCreated }) => {
                     <InputField
                       label="Fin"
                       id={`session_end_${i}`}
+                      aria-invalid={!!errors[`session_${i}`]}
+                      aria-describedby={errors[`session_${i}`] ? `session_error_${i}` : undefined}
                       type="time"
                       value={session.end_time}
                       onChange={(e) => updateSession(i, 'end_time', e.target.value)}
@@ -270,6 +248,8 @@ const CourseForm = ({ onCourseCreated }) => {
                     <Select
                       label="Tipo"
                       id={`session_type_${i}`}
+                      aria-invalid={!!errors[`session_${i}`]}
+                      aria-describedby={errors[`session_${i}`] ? `session_error_${i}` : undefined}
                       options={TYPE_OPTIONS}
                       value={session.type}
                       onChange={(e) => updateSession(i, 'type', e.target.value)}
@@ -277,7 +257,7 @@ const CourseForm = ({ onCourseCreated }) => {
                   </div>
 
                   {errors[`session_${i}`] && (
-                    <p className="text-xs text-red-400 font-medium">{errors[`session_${i}`]}</p>
+                    <p id={`session_error_${i}`} role="alert" className="text-xs text-red-400 font-medium">{errors[`session_${i}`]}</p>
                   )}
 
                   <button
@@ -303,7 +283,7 @@ const CourseForm = ({ onCourseCreated }) => {
       </div>
 
       {serverError && (
-        <p className="text-red-400 text-sm text-center font-medium">{serverError}</p>
+        <p role="alert" className="text-red-400 text-sm text-center font-medium">{serverError}</p>
       )}
 
       <Button type="submit" isLoading={isLoading}>
