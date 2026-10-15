@@ -18,7 +18,7 @@ app = FastAPI(title="PredictUNI Mock Auth API")
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://predict-uni.vercel.app",
+    "https://def-predict.vercel.app",
 ]
 
 frontend_env = os.getenv("FRONTEND_URL")
